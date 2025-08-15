@@ -55,13 +55,6 @@ export const getStreamUrl = async (req, res) => {
       return res.status(404).json({ error: "Media asset not found" });
     }
 
-    const viewLog = new MediaViewLog({
-      media_id: mediaAsset._id,
-      viewed_by_ip: req.ip,
-    });
-
-    await viewLog.save();
-
     const fileName = mediaAsset.file_url.split(`${bucket.name}/`)[1];
 
     const options = {
@@ -75,6 +68,82 @@ export const getStreamUrl = async (req, res) => {
     res.status(200).json({ streamUrl: signedUrl });
   } catch (error) {
     console.error("Error in getStreamUrl controller:", error.message);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+export const logMediaView = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const mediaAsset = await MediaAsset.findById(id);
+    if (!mediaAsset) {
+      return res.status(404).json({ error: "Media asset not found." });
+    }
+
+    const viewLog = new MediaViewLog({
+      media_id: mediaAsset._id,
+      viewed_by_ip: req.ip,
+    });
+    await viewLog.save();
+
+    res.status(201).json({ message: "View logged successfully." });
+  } catch (error) {
+    console.error("Error in logMediaView controller:", error.message);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+export const getMediaAnalytics = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid media ID format." });
+    }
+
+    const mediaAsset = await MediaAsset.findById(id);
+    if (!mediaAsset) {
+      return res.status(404).json({ error: "Media asset not found." });
+    }
+
+    const generalStats = await MediaViewLog.aggregate([
+      { $match: { media_id: mediaIdObject } },
+      {
+        $group: {
+          _id: null,
+          total_views: { $sum: 1 },
+          unique_ips_set: { $addToSet: "$viewed_by_ip" },
+        },
+      },
+    ]);
+
+    const viewsPerDay = await MediaViewLog.aggregate([
+      { $match: { media_id: mediaAsset._id } },
+
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    const total_views = generalStats[0]?.total_views || 0;
+    const unique_ips = generalStats[0]?.unique_ips_set?.length || 0;
+
+    const views_per_day = viewsPerDay.reduce((acc, day) => {
+      acc[day._id] = day.count;
+      return acc;
+    }, {});
+
+    res.status(200).json({
+      total_views,
+      unique_ips,
+      views_per_day,
+    });
+  } catch (error) {
+    console.error("Error in getMediaAnalytics controller:", error.message);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };

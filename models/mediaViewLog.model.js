@@ -17,3 +17,7 @@ const mediaViewLogSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+const MediaViewLog = mongoose.model("MediaViewLog", mediaViewLogSchema);
+
+export default MediaViewLog;

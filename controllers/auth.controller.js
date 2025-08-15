@@ -1,6 +1,6 @@
 import AdminUser from "../models/adminUser.model.js";
 import bcrypt from "bcryptjs";
-import { generateJWT } from "../utils/jwt.utils";
+import { generateJWT } from "../lib/utils.js";
 
 export const signup = async (req, res) => {
   const { email, password } = req.body;
@@ -32,15 +32,19 @@ export const signup = async (req, res) => {
     if (newUser) {
       generateJWT(newUser._id, res);
 
-      res.status(201).json({ message: "User created successfully" });
+      // Send a single response and then stop.
+      return res.status(201).json({
+        _id: newUser._id,
+        email: newUser.email,
+        createdAt: newUser.createdAt,
+      });
     } else {
-      res.status(400).json({ message: "User creation failed" });
+      // This case is unlikely to happen, but it's good practice.
+      return res.status(400).json({ message: "User creation failed" });
     }
-
-    res.status(201).json({ message: "User created successfully" });
   } catch (error) {
     console.error("Error during signup:", error);
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({ message: "Server error" });
   }
 };
 

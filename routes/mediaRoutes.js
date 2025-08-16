@@ -7,6 +7,7 @@ import {
   logMediaView,
   uploadMedia,
 } from "../controllers/media.controller.js";
+import { arcjetViewLimiter } from "../middleware/viewLimiter.middleware.js";
 
 const router = express.Router();
 
@@ -20,6 +21,11 @@ const upload = multer({
 router.post("/", protectRoute, upload.single("mediaFile"), uploadMedia);
 router.get("/:id/stream-url", protectRoute, getStreamUrl);
 router.get("/:id/view", protectRoute, logMediaView);
-router.get("/:id/analytics", protectRoute, getMediaAnalytics);
+router.get(
+  "/:id/analytics",
+  protectRoute,
+  arcjetViewLimiter,
+  getMediaAnalytics
+);
 
 export default router;

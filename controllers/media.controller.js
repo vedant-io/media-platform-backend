@@ -3,6 +3,7 @@ import { bucket } from "../lib/storage.js";
 import MediaAsset from "../models/mediaAsset.model.js";
 
 import MediaViewLog from "../models/mediaViewLog.model.js";
+import client from "../lib/client.js";
 
 export const uploadMedia = (req, res) => {
   try {
@@ -97,6 +98,14 @@ export const logMediaView = async (req, res) => {
 export const getMediaAnalytics = async (req, res) => {
   try {
     const { id } = req.params;
+    const cacheKey = `analytics:${id}`;
+
+    const cachedData = await client.get(cacheKey);
+
+    if (cachedData) {
+      return res.status(200).json(JSON.parse(cachedData));
+    }
+
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ error: "Invalid media ID format." });
     }
@@ -105,6 +114,8 @@ export const getMediaAnalytics = async (req, res) => {
     if (!mediaAsset) {
       return res.status(404).json({ error: "Media asset not found." });
     }
+
+    const mediaIdObject = new mongoose.Types.ObjectId(id);
 
     const generalStats = await MediaViewLog.aggregate([
       { $match: { media_id: mediaIdObject } },
@@ -118,8 +129,7 @@ export const getMediaAnalytics = async (req, res) => {
     ]);
 
     const viewsPerDay = await MediaViewLog.aggregate([
-      { $match: { media_id: mediaAsset._id } },
-
+      { $match: { media_id: mediaIdObject } },
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
@@ -137,11 +147,15 @@ export const getMediaAnalytics = async (req, res) => {
       return acc;
     }, {});
 
-    res.status(200).json({
+    const finalResponse = {
       total_views,
       unique_ips,
       views_per_day,
-    });
+    };
+
+    await client.set(cacheKey, JSON.stringify(finalResponse), "EX", 3600);
+
+    res.status(200).json(finalResponse);
   } catch (error) {
     console.error("Error in getMediaAnalytics controller:", error.message);
     res.status(500).json({ error: "Internal Server Error" });
